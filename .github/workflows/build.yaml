@@ -3,10 +3,7 @@ name: Build
 on:
   push:
     branches:
-    - master
-    - sensu-go
-    tags:
-    - "*"
+    - refs/tags/*
 
 jobs:
   build:
