@@ -1,7 +1,3 @@
-before:
-  hooks:
-  - go get
-
 builds:
 - id: command-plugin
   env:
