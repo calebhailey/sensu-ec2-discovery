@@ -1,3 +1,7 @@
+before:
+  hooks:
+  - go mod tidy
+
 builds:
 - id: command-plugin
   env:
@@ -25,8 +29,12 @@ builds:
   - 386
 
 archives:
-- id: command-plugin
+- id: default
   name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  replacements:
+    amd64: 64-bit
+    386: 32-bit
+    darwin: macos
   format: tar.gz
   builds:
   - command-plugin
@@ -40,3 +48,6 @@ checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_sha512-checksums.txt"
   algorithm: sha512
 
+release:
+  draft: true 
+  prerelease: auto
