@@ -9,10 +9,11 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
+	"github.com/sensu-community/sensu-plugin-sdk/sensu"
 	corev2 "github.com/sensu/sensu-go/api/core/v2"
-	"github.com/calebhailey/sensu-plugins-go-library/sensu"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -30,6 +31,7 @@ type CheckConfig struct {
 	sensuAccessToken           string
 	sensuTrustedCaFile         string
 	sensuInsecureSkipTlsVerify string
+	sensuAPIKey                string
 }
 
 var (
@@ -56,7 +58,7 @@ var (
 			Env:       "EC2_INSTANCE_REGIONS",
 			Argument:  "ec2-instance-regions",
 			Shorthand: "r",
-			Usage:     "The AWS EC2 region(s) to discover. Can also be set via the $EC2_INSTANCE_REGIONS environment variable. OPTIONAL.",
+			Usage:     "The AWS EC2 region(s) to discover. Can also be set via the $EC2_INSTANCE_REGIONS environment variable. REQUIRED.",
 			Value:     &config.ec2InstanceRegions,
 			Default:   "",
 		},
@@ -65,7 +67,7 @@ var (
 			Env:       "EC2_INSTANCE_TAGS",
 			Argument:  "ec2-instance-tags",
 			Shorthand: "t",
-			Usage:     "The AWS Cloudwatch metric dimension. Can also be set via the $EC2_INSTANCE_TAGS environment variable. OPTIONAL.",
+			Usage:     "The AWS EC2 instance tags to discover. Can also be set via the $EC2_INSTANCE_TAGS environment variable.",
 			Value:     &config.ec2InstanceTags,
 			Default:   "",
 		},
@@ -73,7 +75,7 @@ var (
 			Path:      "sensu-namespace",
 			Env:       "SENSU_NAMESPACE",
 			Argument:  "sensu-namespace",
-			Shorthand: "",
+			Shorthand: "n",
 			Usage:     "The Sensu Go Namespace to register entities in. Can also be set via the $SENSU_NAMESPACE environment variable.",
 			Value:     &config.sensuNamespace,
 			Default:   "default",
@@ -82,7 +84,7 @@ var (
 			Path:      "sensu-api-url",
 			Env:       "SENSU_API_URL",
 			Argument:  "sensu-api-url",
-			Shorthand: "",
+			Shorthand: "u",
 			Usage:     "The Sensu Go API URL. Can also be set via the $SENSU_API_URL environment variable.",
 			Value:     &config.sensuApiUrl,
 			Default:   "https://127.0.0.1:8080",
@@ -91,17 +93,28 @@ var (
 			Path:      "sensu-access-token",
 			Env:       "SENSU_ACCESS_TOKEN",
 			Argument:  "sensu-access-token",
-			Shorthand: "",
-			Usage:     "The Sensu Go API access key. Can also be set via the $SENSU_ACCESS_TOKEN environment variable. REQUIRED.",
+			Shorthand: "T",
+			Usage:     "The Sensu Go API access token. Can also be set via the $SENSU_ACCESS_TOKEN environment variable.",
 			Value:     &config.sensuAccessToken,
+			Secret:    true,
+			Default:   "",
+		},
+		{
+			Path:      "sensu-api-key",
+			Env:       "SENSU_API_KEY",
+			Argument:  "sensu-api-key",
+			Shorthand: "k",
+			Usage:     "The Sensu Go API access key. Can also be set via the $SENSU_API_KEY environment variable.",
+			Value:     &config.sensuAPIKey,
+			Secret:    true,
 			Default:   "",
 		},
 		{
 			Path:      "sensu-trusted-ca-file",
 			Env:       "SENSU_TRUSTED_CA_FILE",
 			Argument:  "sensu-trusted-ca-file",
-			Shorthand: "",
-			Usage:     "The Sensu Go API URL. Can also be set via the $SENSU_TRUSTED_CA_FILE environment variable. OPTIONAL.",
+			Shorthand: "c",
+			Usage:     "TLS CA certificate bundle in PEM format.",
 			Value:     &config.sensuTrustedCaFile,
 			Default:   "",
 		},
@@ -109,8 +122,8 @@ var (
 			Path:      "sensu-insecure-tls-skip-verify",
 			Env:       "SENSU_INSECURE_SKIP_TLS_VERIFY",
 			Argument:  "sensu-insecure-tls-skip-verify",
-			Shorthand: "",
-			Usage:     "The Sensu Go API URL. Can also be set via the $SENSU_INSECURE_SKIP_TLS_VERIFY environment variable.",
+			Shorthand: "i",
+			Usage:     "Skip TLS certificate verification (not recommended!)",
 			Value:     &config.sensuInsecureSkipTlsVerify,
 			Default:   "false",
 		},
@@ -118,28 +131,33 @@ var (
 )
 
 func main() {
-	check := sensu.InitCheck(
+	check := sensu.NewGoCheck(
 		&config.PluginConfig,
 		ec2DiscoveryConfigOptions,
 		validateArgs,
 		discoverInstances,
-	)
+		false)
 	check.Execute()
 }
 
-func validateArgs(event *corev2.Event) error {
-	if config.sensuAccessToken == "" {
-		log.Fatalf("ERROR: no Sensu API access token provided. Exiting.")
-		return fmt.Errorf("No Sensu API access token provided. Exiting.")
+func validateArgs(event *corev2.Event) (int, error) {
+	if len(config.sensuAccessToken) == 0 && len(config.sensuAPIKey) == 0 {
+		log.Fatalf("ERROR: no Sensu API access token or key provided. Exiting.")
+		return sensu.CheckStateCritical, fmt.Errorf("No Sensu API access token or key provided. Exiting.")
+	}
+
+	if len(config.ec2InstanceRegions) == 0 {
+		log.Fatalf("ERROR: no EC2 instance regions provided. Exiting.")
+		return sensu.CheckStateCritical, fmt.Errorf("No EC2 instance regions provided. Exiting.")
 	}
 
 	err := createFilters()
 	if err != nil {
 		log.Fatalf("ERROR: %s\n", err)
-		return err
+		return sensu.CheckStateCritical, err
 	}
 
-	return nil
+	return sensu.CheckStateOK, nil
 }
 
 func createFilters() error {
@@ -169,7 +187,7 @@ func createFilters() error {
 	return nil
 }
 
-func LoadCACerts(path string) (*x509.CertPool, error) {
+func loadCACerts(path string) (*x509.CertPool, error) {
 	rootCAs, err := x509.SystemCertPool()
 	if err != nil {
 		log.Fatalf("ERROR: failed to load system cert pool: %s", err)
@@ -191,18 +209,32 @@ func LoadCACerts(path string) (*x509.CertPool, error) {
 }
 
 func initHttpClient() *http.Client {
-	certs, err := LoadCACerts(config.sensuTrustedCaFile)
-	if err != nil {
-		log.Fatalf("ERROR: %s\n", err)
-	}
-	tlsConfig := &tls.Config{
-		RootCAs: certs,
-	}
-	tr := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
 	client := &http.Client{
-		Transport: tr,
+		Transport: http.DefaultTransport,
+	}
+
+	if len(config.sensuTrustedCaFile) > 0 {
+		certs, err := loadCACerts(config.sensuTrustedCaFile)
+		if err != nil {
+			log.Fatalf("ERROR: %s\n", err)
+		}
+		tlsConfig := &tls.Config{
+			RootCAs: certs,
+		}
+		client.Transport = &http.Transport{
+			TLSClientConfig: tlsConfig,
+		}
+	}
+	// sensuInsecureSkipTlsVerify is a string as it comes in from the
+	// sensuctl env
+	skipVerify, _ := strconv.ParseBool(config.sensuInsecureSkipTlsVerify)
+	if skipVerify {
+		if transport, ok := client.Transport.(*http.Transport); ok {
+			if transport.TLSClientConfig == nil {
+				transport.TLSClientConfig = new(tls.Config)
+			}
+			transport.TLSClientConfig.InsecureSkipVerify = true
+		}
 	}
 	return client
 }
@@ -236,18 +268,22 @@ func registerInstance(instance *ec2.Instance) {
 		log.Fatal("ERROR: ", err)
 	}
 	var httpClient *http.Client = initHttpClient()
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", config.sensuAccessToken))
+	if len(config.sensuAccessToken) > 0 {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", config.sensuAccessToken))
+	} else if len(config.sensuAPIKey) > 0 {
+		req.Header.Set("Authorization", fmt.Sprintf("Key %s", config.sensuAPIKey))
+	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Fatalf("ERROR: %s\n", err)
-	} else if resp.StatusCode == 404 {
+	} else if resp.StatusCode == http.StatusNotFound {
 		log.Fatalf("ERROR: %v %s (%s)\n", resp.StatusCode, http.StatusText(resp.StatusCode), req.URL)
-	} else if resp.StatusCode == 409 {
+	} else if resp.StatusCode == http.StatusConflict {
 		log.Printf("INFO: entity \"%s\" already exists (%v: %s)\n", entity.Name, resp.StatusCode, http.StatusText(resp.StatusCode))
-	} else if resp.StatusCode >= 300 {
+	} else if resp.StatusCode >= http.StatusMultipleChoices {
 		log.Fatalf("ERROR: %v %s", resp.StatusCode, http.StatusText(resp.StatusCode))
-	} else if resp.StatusCode == 201 {
+	} else if resp.StatusCode == http.StatusCreated {
 		log.Printf("INFO: registered entity for EC2 instance \"%s\"", entity.Name)
 	} else {
 		defer resp.Body.Close()
@@ -263,7 +299,7 @@ func registerInstance(instance *ec2.Instance) {
 }
 
 // Usage: instancesByRegion -api <url> -state <value> [-state value...] [-region region...] [-tag key=value...]
-func discoverInstances(event *corev2.Event) error {
+func discoverInstances(event *corev2.Event) (int, error) {
 	for _, region := range strings.Split(config.ec2InstanceRegions, ",") {
 		aws_session := session.Must(session.NewSession(&aws.Config{
 			Region: aws.String(region),
@@ -275,7 +311,7 @@ func discoverInstances(event *corev2.Event) error {
 		result, err := svc.DescribeInstances(params)
 		if err != nil {
 			log.Fatalf("ERROR: %s\n", err)
-			return err
+			return sensu.CheckStateCritical, err
 		} else {
 			for _, reservation := range result.Reservations {
 				for _, instance := range reservation.Instances {
@@ -284,5 +320,5 @@ func discoverInstances(event *corev2.Event) error {
 			}
 		}
 	}
-	return nil
+	return sensu.CheckStateOK, nil
 }

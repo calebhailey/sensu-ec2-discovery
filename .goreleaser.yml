@@ -27,10 +27,6 @@ builds:
 archives:
 - id: default
   name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-  replacements:
-    amd64: 64-bit
-    386: 32-bit
-    darwin: macos
   format: tar.gz
   builds:
   - command-plugin
