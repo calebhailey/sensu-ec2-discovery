@@ -2,35 +2,66 @@ builds:
 - id: command-plugin
   env:
   - CGO_ENABLED=0
+  ldflags: '-s -w -X github.com/sensu-community/sensu-plugin-sdk/version.version={{.Version}} -X github.com/sensu-community/sensu-plugin-sdk/version.commit={{.Commit}} -X github.com/sensu-community/sensu-plugin-sdk/version.date={{.Date}}'
   main: main.go
   binary: bin/entrypoint
   goos:
-  - darwin
-  - linux
-  - windows
+    - darwin
+    - linux
+    - windows
   goarch:
-  - amd64
-  - 386
+    - amd64
+    - 386
+    - arm
+    - arm64
+  goarm:
+    - 5
+    - 6
+    - 7
+  targets:
+    - darwin_amd64
+    - linux_386
+    - linux_amd64
+    - linux_arm_5
+    - linux_arm_6
+    - linux_arm_7
+    - linux_arm64
+    - windows_386
+    - windows_amd64
+
 - id: check-plugin
   env:
   - CGO_ENABLED=0
+  ldflags: '-s -w -X github.com/sensu-community/sensu-plugin-sdk/version.version={{.Version}} -X github.com/sensu-community/sensu-plugin-sdk/version.commit={{.Commit}} -X github.com/sensu-community/sensu-plugin-sdk/version.date={{.Date}}'
   main: main.go
   binary: bin/{{ .ProjectName }}
   goos:
-  - darwin
-  - linux
-  - windows
+    - darwin
+    - linux
+    - windows
   goarch:
-  - amd64
-  - 386
+    - amd64
+    - 386
+    - arm
+    - arm64
+  goarm:
+    - 5
+    - 6
+    - 7
+  targets:
+    - darwin_amd64
+    - linux_386
+    - linux_amd64
+    - linux_arm_5
+    - linux_arm_6
+    - linux_arm_7
+    - linux_arm64
+    - windows_386
+    - windows_amd64
 
 archives:
 - id: default
-  name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
   format: tar.gz
-  builds:
-  - command-plugin
-  - check-plugin
   files:
   - LICENSE
   - README.md
