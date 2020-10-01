@@ -1,11 +1,11 @@
 package main
 
 import (
-        "testing"
+	"testing"
 
-        "github.com/sensu-community/sensu-plugin-sdk/sensu"
-        corev2 "github.com/sensu/sensu-go/api/core/v2"
-        "github.com/stretchr/testify/assert"
+	"github.com/sensu-community/sensu-plugin-sdk/sensu"
+	corev2 "github.com/sensu/sensu-go/api/core/v2"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMain(t *testing.T) {
@@ -27,4 +27,3 @@ func TestValidateArgs(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(sensu.CheckStateOK, ret)
 }
-
