@@ -249,8 +249,6 @@ func registerInstance(instance *ec2.Instance) {
 		entity.Labels[*tag.Key] = *tag.Value
 	}
 
-	// fmt.Printf("%s\n", entity.Name)
-
 	postBody, err := json.Marshal(entity)
 	if err != nil {
 		log.Fatal("ERROR: ", err)
@@ -294,8 +292,6 @@ func registerInstance(instance *ec2.Instance) {
 			fmt.Printf("%s\n", string(b))
 		}
 	}
-
-	return
 }
 
 // Usage: instancesByRegion -api <url> -state <value> [-state value...] [-region region...] [-tag key=value...]
