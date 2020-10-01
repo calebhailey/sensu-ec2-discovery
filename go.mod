@@ -8,4 +8,5 @@ require (
 	github.com/jmespath/go-jmespath v0.0.0-20160803190731-bd40a432e4c7
 	github.com/sensu-community/sensu-plugin-sdk v0.8.1
 	github.com/sensu/sensu-go/api/core/v2 v2.3.0
+	github.com/stretchr/testify v1.6.0
 )

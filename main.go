@@ -142,18 +142,18 @@ func main() {
 
 func validateArgs(event *corev2.Event) (int, error) {
 	if len(config.sensuAccessToken) == 0 && len(config.sensuAPIKey) == 0 {
-		log.Fatalf("ERROR: no Sensu API access token or key provided. Exiting.")
-		return sensu.CheckStateCritical, fmt.Errorf("No Sensu API access token or key provided. Exiting.")
+		log.Print("ERROR: no Sensu API access token or key provided.")
+		return sensu.CheckStateCritical, fmt.Errorf("No Sensu API access token or key provided.")
 	}
 
 	if len(config.ec2InstanceRegions) == 0 {
-		log.Fatalf("ERROR: no EC2 instance regions provided. Exiting.")
-		return sensu.CheckStateCritical, fmt.Errorf("No EC2 instance regions provided. Exiting.")
+		log.Print("ERROR: no EC2 instance regions provided.")
+		return sensu.CheckStateCritical, fmt.Errorf("No EC2 instance regions provided.")
 	}
 
 	err := createFilters()
 	if err != nil {
-		log.Fatalf("ERROR: %s\n", err)
+		log.Printf("ERROR: %s\n", err)
 		return sensu.CheckStateCritical, err
 	}
 
